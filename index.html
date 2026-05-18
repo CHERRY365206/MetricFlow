@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetricFlow - Goal Setting Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.37.1/js/msal-browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Entra ID Login Simulation -->
+    <div id="loginScreen" class="login-wrapper">
+        <div class="login-box glass-panel fade-in">
+            <div class="logo" style="justify-content: center; margin-bottom: 2rem;">
+                <div class="logo-icon" style="width:60px; height:60px; font-size:2rem;">MF</div>
+            </div>
+            <h2 class="font-outfit" style="text-align: center; margin-bottom: 0.5rem;">MetricFlow</h2>
+            <p class="text-muted" style="text-align: center; margin-bottom: 2rem;">Enterprise Goal Tracking Portal</p>
+            
+            <div class="form-group" style="margin-bottom: 1.5rem; text-align: left;">
+                <label for="loginRoleSelect" style="color: var(--text-main);">Select Role to Continue:</label>
+                <select id="loginRoleSelect" style="width: 100%; background: rgba(0,0,0,0.4); border-color: var(--glass-border);">
+                    <option value="employee">Employee (John Doe)</option>
+                    <option value="manager">Manager (Jane Smith)</option>
+                    <option value="admin">Admin / HR</option>
+                </select>
+            </div>
+            
+            <button id="btnEntraLogin" class="btn-entra">
+                <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path d="M10 0H0v10h10V0zM21 0H11v10h10V0zM10 11H0v10h10V11zM21 11H11v10h10V11z" fill="#00a4ef"/></svg>
+                Sign in with Microsoft Entra ID
+            </button>
+            <button id="btnDemoLogin" class="btn-secondary" style="width: 100%; margin-top: 0.5rem; justify-content: center; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: var(--text-muted);">
+                Skip SSO (Demo Mode)
+            </button>
+            
+            <div style="margin-top: 1.5rem;">
+                <a href="#" id="linkHowItWorks" style="color: var(--primary); font-size: 0.85rem; text-decoration: none; font-weight: 600; transition: color 0.2s;">ℹ️ How MetricFlow Works</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="hidden">
+        <nav class="glass-nav">
+            <div class="logo">
+                <div class="logo-icon">MF</div>
+                <h1 class="font-outfit">MetricFlow</h1>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <span id="activeCycleBadge" class="badge" style="background: var(--primary); color: white;">Phase 1: Goal Setting</span>
+                <button id="btnThemeToggle" class="btn-icon" title="Toggle Theme" style="font-size: 1.1rem;">🌙</button>
+                <button id="btnShowIntegrations" class="btn-icon" title="View Teams/Email Notifications">🔔 <span id="notifBadge" class="notif-badge hidden">0</span></button>
+                <div id="navUserDisplay" class="profile-container text-muted" title="Profile"></div>
+                <button id="btnLogout" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Logout</button>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <!-- Content Container -->
+            <div id="viewContainer" class="fade-in">
+                <!-- Dynamically populated by JS -->
+            </div>
+        </main>
+    </div>
+    
+    <div id="toast-container"></div>
+
+    <!-- Notifications Hub Overlay -->
+    <div id="integrationHub" class="integration-hub transform-out">
+        <div class="hub-header">
+            <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="#6264A7" style="vertical-align:text-bottom; margin-right:5px;"><path d="M22.5 12c0 5.8-4.7 10.5-10.5 10.5S1.5 17.8 1.5 12 6.2 1.5 12 1.5 22.5 6.2 22.5 12z"/></svg> Teams & Email Activity</h3>
+            <button class="btn-close" id="btnCloseHub">&times;</button>
+        </div>
+        <div class="hub-content" id="hubContent">
+            <!-- Webhook logs injected here -->
+            <p class="text-muted" style="text-align:center; margin-top:2rem;">No new notifications</p>
+        </div>
+    </div>
+
+    <!-- Templates for different views -->
+    <template id="tpl-employee">
+        <div class="dashboard-header">
+            <div>
+                <h2 class="font-outfit">My Goal Sheet</h2>
+                <p class="text-muted" id="empCycleText">Phase 1 & Phase 2 Dashboard</p>
+            </div>
+            <div class="header-actions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <div class="weightage-pill">
+                    <span class="label">Total Weightage</span>
+                    <span class="value" id="totalWeightDisplay">0%</span>
+                </div>
+                <button id="btnNewGoal" class="btn-primary"><span>+</span> New Goal</button>
+                <button id="btnSubmitGoals" class="btn-success" disabled>Submit Goals</button>
+            </div>
+        </div>
+
+        <div id="cycleWarningEmp" class="alert-banner hidden"></div>
+
+        <div id="employeeGoalList" class="goal-grid">
+            <!-- Employee Goals Injected Here -->
+        </div>
+        
+        <!-- Modal for New/Edit Goal -->
+        <div id="goalModal" class="modal hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3 class="font-outfit">Define Goal</h3>
+                    <button class="btn-close" id="btnCloseGoalModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="goalForm">
+                        <div class="form-group">
+                            <label>Thrust Area</label>
+                            <select id="goalThrustArea" required>
+                                <option value="">Select Area</option>
+                                <option value="Financial">Financial</option>
+                                <option value="Customer">Customer</option>
+                                <option value="Process">Process</option>
+                                <option value="Learning">Learning & Growth</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                <label style="margin-bottom:0;">Goal Title</label>
+                                <button type="button" class="btn-ai" id="btnAiImprove">✨ AI Optimize</button>
+                            </div>
+                            <input type="text" id="goalTitle" required placeholder="E.g., Increase sales by 10%">
+                        </div>
+                        <div class="form-group">
+                            <label>Description (Optional)</label>
+                            <textarea id="goalDesc" rows="2"></textarea>
+                        </div>
+                        <div class="form-group-row">
+                            <div class="form-group">
+                                <label>Unit of Measurement (UoM)</label>
+                                <select id="goalUom" required>
+                                    <option value="Min">Min (Numeric / % - Higher is better)</option>
+                                    <option value="Max">Max (Numeric / % - Lower is better)</option>
+                                    <option value="Timeline">Timeline (Date-based)</option>
+                                    <option value="Zero">Zero (Zero = Success)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="targetWrapper">
+                                <label>Target</label>
+                                <input type="number" id="goalTarget" required step="0.01">
+                            </div>
+                            <div class="form-group" id="deadlineWrapper" class="hidden" style="display:none;">
+                                <label>Deadline</label>
+                                <input type="date" id="goalDeadline">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Weightage (%)</label>
+                            <input type="number" id="goalWeightage" required min="10" max="100">
+                            <small class="text-muted">Minimum 10% per individual goal.</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" id="btnCancelGoal">Cancel</button>
+                    <button type="button" class="btn-primary" id="btnSaveGoal">Save Goal</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Updating Achievement -->
+        <div id="achievementModal" class="modal hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3 class="font-outfit">Quarterly Update</h3>
+                    <button class="btn-close" id="btnCloseAchModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="achForm">
+                        <div class="form-group">
+                            <label>Current Status</label>
+                            <select id="achStatus" required>
+                                <option value="Not Started">Not Started</option>
+                                <option value="On Track">On Track</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="actualWrapper">
+                            <label>Actual Achievement</label>
+                            <input type="number" id="achActual" step="0.01">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" id="btnCancelAch">Cancel</button>
+                    <button type="button" class="btn-primary" id="btnSaveAch">Save Update</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="tpl-manager">
+        <div class="dashboard-header">
+            <div>
+                <h2 class="font-outfit">Team Dashboard</h2>
+                <p class="text-muted">Review goals and conduct quarterly check-ins</p>
+            </div>
+            <button class="btn-secondary" id="btnExportCSV">Export Achievement Report</button>
+        </div>
+
+        <div id="cycleWarningMgr" class="alert-banner hidden"></div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="approvals">Goal Approvals</button>
+            <button class="tab-btn" data-tab="checkins">Quarterly Check-ins</button>
+        </div>
+
+        <div id="mgrContentArea" class="tab-content mt-4">
+            <!-- Manager content injected here -->
+        </div>
+
+        <!-- Manager Feedback Modal -->
+        <div id="mgrFeedbackModal" class="modal hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3 class="font-outfit" id="mgrFeedbackTitle">Goal Action</h3>
+                    <button class="btn-close" id="btnCloseFeedbackModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Comment / Feedback</label>
+                        <textarea id="mgrFeedbackText" rows="3" required placeholder="Provide reason for return or approval notes..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" id="btnCancelFeedback">Cancel</button>
+                    <button type="button" class="btn-primary" id="btnSubmitFeedback">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="tpl-admin">
+        <div class="dashboard-header">
+            <div>
+                <h2 class="font-outfit">Admin Control Center</h2>
+                <p class="text-muted">System monitoring, configuration, and analytics</p>
+            </div>
+            <div class="header-actions stagger-1" style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 1rem; align-items: center;">
+                <button class="btn-danger" id="btnFactoryReset" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger);">🚨 Reset DB</button>
+                <button class="btn-danger" id="btnRunEscalation">Run Escalation Engine</button>
+                <button class="btn-primary" id="btnPushSharedGoal">Push Shared KPI</button>
+            </div>
+        </div>
+
+        <!-- Cycle Management -->
+        <div class="admin-card glass-panel stagger-1" style="margin-bottom: 2rem;">
+            <h3>Active Cycle Management</h3>
+            <p class="text-muted" style="margin-bottom: 1rem;">Control which phases are open for employees and managers.</p>
+            <div class="cycle-buttons">
+                <button class="btn-cycle active" data-cycle="phase1">Phase 1 (Goal Setting)</button>
+                <button class="btn-cycle" data-cycle="q1">Q1 Check-in</button>
+                <button class="btn-cycle" data-cycle="q2">Q2 Check-in</button>
+                <button class="btn-cycle" data-cycle="q3">Q3 Check-in</button>
+                <button class="btn-cycle" data-cycle="q4">Q4 / Annual</button>
+            </div>
+        </div>
+
+        <!-- Analytics Module -->
+        <div class="admin-grid mb-4">
+            <div class="admin-card glass-panel stagger-2">
+                <h3>Goal Distribution (Thrust Areas)</h3>
+                <div class="chart-container" style="height: 250px; position: relative; margin-top: 1rem;">
+                    <canvas id="pieChartCanvas"></canvas>
+                </div>
+            </div>
+            
+            <div class="admin-card glass-panel stagger-3">
+                <h3>Manager Effectiveness</h3>
+                <p class="text-muted" style="font-size:0.8rem; margin-bottom:1rem;">Check-in completion rates across L1 Managers</p>
+                <div style="height: 250px; position: relative;">
+                    <canvas id="barChartCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-grid">
+            <div class="admin-card glass-panel stagger-4">
+                <h3>System Logs (Audit Trail)</h3>
+                <div class="audit-log" id="auditLogContainer">
+                    <!-- Logs injected here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Push Shared Goal Modal -->
+        <div id="sharedGoalModal" class="modal hidden">
+            <!-- Modal Content (same as before) -->
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3 class="font-outfit">Push Departmental KPI</h3>
+                    <button class="btn-close" id="btnCloseSharedModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="sharedGoalForm">
+                        <div class="form-group">
+                            <label>Thrust Area</label>
+                            <select id="sgThrustArea" required>
+                                <option value="Financial">Financial</option>
+                                <option value="Customer">Customer</option>
+                                <option value="Process">Process</option>
+                                <option value="Learning">Learning & Growth</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Goal Title</label>
+                            <input type="text" id="sgTitle" required placeholder="E.g., Department Revenue Target">
+                        </div>
+                        <div class="form-group">
+                            <label>UoM</label>
+                            <select id="sgUom">
+                                <option value="Min">Min (Numeric)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Target</label>
+                            <input type="number" id="sgTarget" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" id="btnCancelShared">Cancel</button>
+                    <button type="button" class="btn-primary" id="btnSaveShared">Push to All</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- How it Works Modal -->
+    <div id="howItWorksModal" class="modal hidden" style="z-index: 10000;">
+        <div class="modal-content glass-panel" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="font-outfit">Welcome to MetricFlow</h3>
+                <button class="btn-close" id="btnCloseHowItWorks">&times;</button>
+            </div>
+            <div class="modal-body" style="line-height: 1.6; color: var(--text-main); text-align: left;">
+                <p style="margin-bottom: 1.5rem;"><strong>MetricFlow</strong> is an enterprise goal-setting and tracking portal designed for seamless performance management.</p>
+                
+                <h4 style="margin-bottom: 0.5rem; color: var(--secondary);">👤 For Employees</h4>
+                <ul style="margin-bottom: 1.5rem; padding-left: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <li>Define goals aligned with 4 thrust areas (Financial, Customer, Process, Learning).</li>
+                    <li>Ensure total weightage equals exactly 100% before submission.</li>
+                    <li>Update your actual progress during active check-in cycles (Q1, Q2, etc.).</li>
+                </ul>
+
+                <h4 style="margin-bottom: 0.5rem; color: var(--secondary);">👥 For Managers</h4>
+                <ul style="margin-bottom: 1.5rem; padding-left: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <li>Review, approve, or return employee goals for rework.</li>
+                    <li>Conduct quarterly check-ins and provide feedback on approved goals.</li>
+                    <li>Export your team's performance data to CSV.</li>
+                </ul>
+
+                <h4 style="margin-bottom: 0.5rem; color: var(--secondary);">⚙️ For HR / Admins</h4>
+                <ul style="margin-bottom: 1.5rem; padding-left: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <li>Control the active system cycle (locking/unlocking features).</li>
+                    <li>Monitor real-time analytics and goal distribution.</li>
+                    <li>Run the <strong>Escalation Engine</strong> to automatically nudge managers and employees via Teams/Email.</li>
+                </ul>
+                
+                <p style="text-align: center; color: var(--primary); font-weight: 600; margin-top: 1rem;">Select a role from the dropdown on the login screen to explore!</p>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button type="button" class="btn-primary" id="btnGotItHowItWorks" style="width: 100%; justify-content: center;">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
